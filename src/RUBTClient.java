@@ -47,6 +47,9 @@ public class RUBTClient {
 			return;
 		}
 		
+		
+		
+		
 		//Checks if the given torrent file is valid
 		File torrentFile = new File(torrent);
 		if(!torrentFile.exists()){
@@ -112,11 +115,11 @@ public class RUBTClient {
 			//use all peers to download
 			for(Peer p: peerList){
 				//only connect to specified peers
-				//if(p.peerId.contains("-RUBT11") || p.peerId.contains("-RU11")){
-					System.out.println("Possible RU peer: " + p.peerId);
+				if(p.peerId.contains("-RUBT11") || p.peerId.contains("-RU11")){
+					System.out.println("Possible peer: " + p.peerId);
 					peers.add(p);
 					
-				//}
+				}
 			}
 			System.out.println();
 			/*
@@ -144,22 +147,41 @@ public class RUBTClient {
 			//Connect to peers and start download
 			//1 thread per peer
 			
-			ArrayList<Thread> threads = new ArrayList<Thread>();
-			for(Peer p: peers){
-				System.out.println("Starting new thread for peer: " + p.peerId);
-				Thread t = new Thread(p);
-				threads.add(t);
-				t.start();
-			}
+			
+			
+			pm.setPeers(peers);
+			
+			Thread managerThread = new Thread(pm);
+			
 			long stopTime = 0;
 			long startTime = System.nanoTime();
+			managerThread.start();
+					
+		
+			
 			try{
-				for(Thread t: threads){
-					t.join();
-				}
+				managerThread.join();
 			}
 			catch(InterruptedException e){
 				
+			}
+			
+			if(pm.numPiecesDownloaded() != tracker.torrentInfo.piece_hashes.length){
+				pm.setDownloaded(tracker.getDownloaded());
+				pm.setLeft(tracker.getLeft());
+				pm.setUploaded(tracker.getUploaded());
+				
+				writeAdmin(pm);
+				
+				tracker.send("stopped");
+				
+			}
+			else{
+				//send completed and stopped messages
+				tracker.send("completed");
+				
+				System.out.println(RUBTClient.saveFile + " has been successfully downloaded!");
+				tracker.send("stopped");
 			}
 			
 			stopTime = System.nanoTime();
@@ -169,11 +191,7 @@ public class RUBTClient {
 				tracker.trackerTimer.cancel();
 				tracker.trackerTimer.purge();
 			}
-			//send completed and stopped messages
-			tracker.send("completed");
 			
-			System.out.println(RUBTClient.saveFile + " has been successfully downloaded!");
-			tracker.send("stopped");
 		}
 		catch(BencodingException e){
 			System.err.println("Bencoding exception while decoding the reponse.");
@@ -239,16 +257,20 @@ public class RUBTClient {
 		try{
 			File file = new File("bitfield.dat");
 			if(!file.exists()){
+				System.out.println("Program started in new state.");
 				return new PieceManager(length, new Bitfield(length), saveFile);
+				
 			}
 			ObjectInputStream ois = new ObjectInputStream(
 					new FileInputStream("bitfield.dat"));
 			PieceManager pm = (PieceManager) ois.readObject();
 			pm.setDown();
 			ois.close();
+			System.out.println("Program started in preserved state.");
 			return pm;
 		}
 		catch(Exception e){
+			System.out.println("Program started in new state.");
 			return new PieceManager(length, new Bitfield(length), saveFile);
 		}
 	}

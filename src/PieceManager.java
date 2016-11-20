@@ -1,8 +1,10 @@
 
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -17,7 +19,7 @@ import java.util.Random;
  * @author Rohan Patel
  *
  */
-public class PieceManager implements Serializable{
+public class PieceManager implements Serializable, Runnable{
 
 	/**
 	 * pieces downloaded
@@ -57,7 +59,13 @@ public class PieceManager implements Serializable{
 	
 	private transient RandomAccessFile raf;
 	
-	private transient File file;
+	private  File file;
+	
+	private transient ArrayList<Peer> peers;
+	
+	private transient ArrayList<Thread> threads;
+	
+	public transient static boolean stop;
 	/**
 	 * instantiates the PieceManager
 	 * if first time pieceList is initialized. if not previous pieces will be populated.
@@ -66,12 +74,91 @@ public class PieceManager implements Serializable{
 		 pieceList = new boolean[numPieces];
 		 downloading = new boolean[numPieces];
 		 bitfield = field;
+		 stop = false;
 		 this.file = file;
 		 try {
 			raf = new RandomAccessFile(this.file, "rw");
 		} catch (FileNotFoundException e) {
 			
 		}
+		
+	}
+	
+	
+	public void setPeers(ArrayList<Peer> peers){
+		this.peers = peers;
+	}
+	
+	public void run() {
+		// TODO Auto-generated method stub
+		try {
+			startDownload();
+		} catch (Exception e) {
+			System.err.println(e.getMessage());
+			
+			return;
+		}
+	}
+	
+	public static synchronized boolean  getSetStop(int i){
+		if(stop == true){
+			return true;
+		}
+		if(i == 0){
+			return stop;
+		}
+		else{
+			stop = !stop;
+			return stop;
+		}
+	}
+	
+	public void startDownload(){
+		InputStreamReader fileInputStream=new InputStreamReader(System.in);
+	    BufferedReader bufferedReader=new BufferedReader(fileInputStream);
+		System.out.println("To begin download type anything, or type 'quit' at anytime to stop.");
+		String input = "";
+		try {
+			input = bufferedReader.readLine();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		threads = new ArrayList<Thread>();
+		for(Peer p: peers){
+			System.out.println("Starting new thread for peer: " + p.peerId);
+			Thread t = new Thread(p);
+			threads.add(t);
+			t.start();
+		}
+		
+		
+			boolean term;
+			while(term = !getSetStop(0)){
+				int count = 0;
+				try {
+					if(bufferedReader.ready()){
+						input = bufferedReader.readLine();
+						if(input.compareToIgnoreCase("quit") == 0){
+							getSetStop(1);
+						}
+					}
+				} catch (IOException e) {
+					
+				}
+				for(Thread t: threads){
+					
+					if(t.isAlive()){
+						count++;
+					}
+				}
+				if(count == 0 ){
+					break;
+				}
+			}
+			if(term){
+				System.out.println("Download was stopped by user input.");
+			}
 		
 	}
 	
@@ -92,13 +179,18 @@ public class PieceManager implements Serializable{
 			try {
 				raf.seek((index*piece.length));
 				raf.write(piece);
-				raf.seek(0);;
+				raf.seek(0);
+				
 			} catch (IOException e) {
 				
 			}
 		}
 		
 		
+	}
+	
+	public int numPiecesDownloaded(){
+		return pieces;
 	}
 	
 	public boolean canDownload(int index){
@@ -159,6 +251,12 @@ public class PieceManager implements Serializable{
 	
 	}
 	
+	public void setTracker(Tracker t){
+		t.setDownloaded(this.downloaded);
+		t.setUploaded(t.getUploaded());
+		t.setLeft(this.left);
+	}
+	
 
 
 	/**
@@ -189,7 +287,20 @@ public class PieceManager implements Serializable{
 	}
 	
 	public void setDown(){
+		if(downloading == null){
+			downloading = new boolean[pieceList.length]; 
+			
+		}
+		if(raf == null){
+			try {
+				raf = new RandomAccessFile(this.file, "rw");
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		for(int i = 0; i < pieceList.length;i++){
+			
 			downloading[i] = pieceList[i];
 		}
 	}

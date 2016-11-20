@@ -203,7 +203,9 @@ public class Peer implements Runnable{
 			Piece piece = null;
 						
 			while (true){
-				
+				if(PieceManager.getSetStop(0)){
+					return;
+				}
 				byte[] arr = new byte[4];
 				
 				this.input.readFully(arr);
@@ -320,7 +322,9 @@ public class Peer implements Runnable{
 								tracker.setDownloaded(fullPiece.length);
 								tracker.setLeft(fullPiece.length);
 								
-								
+								if(PieceManager.getSetStop(0)){
+									return;
+								}
 								System.out.println("Downloaded piece: " + askingPieceIndex + " using Peer: " + peerId + " " + peerIp);
 								pieceManager.setPiece(askingPieceIndex, fullPiece);
 								
